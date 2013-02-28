@@ -158,12 +158,7 @@ public class HttpClientTestCase {
                 } finally {
                     IoUtils.safeClose(channel);
                 }
-                try {
-                    connection.createRequest(Methods.GET, new URI("/1324")).writeRequest();
-                    Assert.fail();
-                } catch (IOException e) {
-                    // OK
-                }
+                Assert.assertNull(connection.createRequest(Methods.GET, new URI("/1324")));
             } finally {
                 IoUtils.safeClose(connection);
             }

@@ -80,6 +80,13 @@ public abstract class HttpClientConnection extends AbstractAttachable implements
      */
     public abstract IoFuture<ConnectedStreamChannel> upgradeToWebSocket(final String service, final OptionMap optionMap) throws IOException;
 
+    /**
+     * Flag whether this connection is closed.
+     *
+     * @return {@code true} if closed, {@code false} otherwise
+     */
+    public abstract boolean isClosed();
+
     abstract OptionMap getOptions();
     abstract Pool<ByteBuffer> getBufferPool();
 

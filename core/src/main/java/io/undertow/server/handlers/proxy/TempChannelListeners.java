@@ -17,7 +17,7 @@
  * limitations under the License.
  */
 
-package io.undertow.client;
+package io.undertow.server.handlers.proxy;
 
 import org.xnio.ChannelExceptionHandler;
 import org.xnio.ChannelListener;
@@ -72,7 +72,7 @@ class TempChannelListeners {
             switch (state) {
                 case 0: {
                     // read listener
-                    for (;;) {
+                    for (; ; ) {
                         try {
                             lres = source.transferTo(count, buffer, sink);
                         } catch (IOException e) {
@@ -116,7 +116,7 @@ class TempChannelListeners {
                 }
                 case 1: {
                     // write listener
-                    for (;;) {
+                    for (; ; ) {
                         while (buffer.hasRemaining()) {
                             try {
                                 ires = sink.write(buffer);
@@ -214,14 +214,14 @@ class TempChannelListeners {
      * Initiate a low-copy transfer between two stream channels.  The pool should be a direct buffer pool for best
      * performance.
      *
-     * @param count the number of bytes to transfer, or {@link Long#MAX_VALUE} to transfer all remaining bytes
-     * @param source the source channel
-     * @param sink the target channel
-     * @param sourceListener the source listener to set and call when the transfer is complete, or {@code null} to clear the listener at that time
-     * @param sinkListener the target listener to set and call when the transfer is complete, or {@code null} to clear the listener at that time
-     * @param readExceptionHandler the read exception handler to call if an error occurs during a read operation
+     * @param count                 the number of bytes to transfer, or {@link Long#MAX_VALUE} to transfer all remaining bytes
+     * @param source                the source channel
+     * @param sink                  the target channel
+     * @param sourceListener        the source listener to set and call when the transfer is complete, or {@code null} to clear the listener at that time
+     * @param sinkListener          the target listener to set and call when the transfer is complete, or {@code null} to clear the listener at that time
+     * @param readExceptionHandler  the read exception handler to call if an error occurs during a read operation
      * @param writeExceptionHandler the write exception handler to call if an error occurs during a write operation
-     * @param pool the pool from which the transfer buffer should be allocated
+     * @param pool                  the pool from which the transfer buffer should be allocated
      */
     public static <I extends StreamSourceChannel, O extends StreamSinkChannel> void initiateTransfer(long count, final I source, final O sink, final ChannelListener<? super I> sourceListener, final ChannelListener<? super O> sinkListener, final ChannelExceptionHandler<? super I> readExceptionHandler, final ChannelExceptionHandler<? super O> writeExceptionHandler, Pool<ByteBuffer> pool) {
         if (pool == null) {
@@ -264,7 +264,7 @@ class TempChannelListeners {
                 if (count != Long.MAX_VALUE) {
                     count -= transferred;
                 }
-                if(transferred > 0L
+                if (transferred > 0L
                         && buffer.position() == 0
                         && buffer.remaining() == buffer.limit()) {
                     // Skip cleared buffers

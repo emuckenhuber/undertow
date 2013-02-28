@@ -133,7 +133,7 @@ class HttpClientRequestImpl extends HttpClientRequest {
         boolean keepAlive;
         if (http11) {
             if(headers.contains(Headers.CONNECTION)) {
-                keepAlive = headers.get(Headers.CONNECTION).equals(Headers.KEEP_ALIVE.toString());
+                keepAlive = headers.getFirst(Headers.CONNECTION).equals(Headers.KEEP_ALIVE.toString());
             } else {
                 keepAlive = true;
             }
@@ -277,7 +277,6 @@ class HttpClientRequestImpl extends HttpClientRequest {
                         IoUtils.safeClose(requestChannel);
                     }
                 }
-
             }
         };
     }

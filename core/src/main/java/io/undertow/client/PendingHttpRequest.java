@@ -253,10 +253,13 @@ public final class PendingHttpRequest {
         final boolean http11 = Protocols.HTTP_1_1.equals(getProtocol());
 
         boolean closeConnection;
+        final boolean hasConnectionHeader = headers.contains(Headers.CONNECTION);
+        final boolean hasTransferEncoding = headers.contains(Headers.TRANSFER_ENCODING);
+        final boolean hasContentLength = headers.contains(Headers.CONTENT_LENGTH);
         if(http11) {
-            closeConnection = Headers.CLOSE.equals(new HttpString(headers.getFirst(Headers.CONNECTION)));
+            closeConnection = hasConnectionHeader ? Headers.CLOSE.equals(new HttpString(headers.getFirst(Headers.CONNECTION))) : false;
         } else if (Protocols.HTTP_1_0.equals(getProtocol())) {
-            closeConnection = ! Headers.KEEP_ALIVE.equals(new HttpString(headers.getFirst(Headers.CONNECTION)));
+            closeConnection =  hasConnectionHeader ? ! Headers.KEEP_ALIVE.equals(new HttpString(headers.getFirst(Headers.CONNECTION))) : true;
         } else {
             closeConnection = true;
         }
@@ -272,22 +275,23 @@ public final class PendingHttpRequest {
         if(! noContent && Methods.HEAD_STRING.equals(request.getMethod())) {
             noContent = true;
         }
-        // Process the content length and transfer encodings
-        StreamSourceConduit conduit = new StreamSourceChannelWrappingConduit(channel);
+
         long contentLength = -1;
+        StreamSourceConduit conduit = new StreamSourceChannelWrappingConduit(channel);
         if(noContent) {
             conduit = new EmptyStreamSourceConduit(channel.getIoThread());
         } else {
-            String transferEncoding = Headers.IDENTITY.toString();
-            if (headers.contains(Headers.TRANSFER_ENCODING)) {
-                transferEncoding = headers.getLast(Headers.TRANSFER_ENCODING);
-            } else if (http11 && ! headers.contains(Headers.CONTENT_LENGTH)) {
-                transferEncoding = Headers.CHUNKED.toString();
+            // Process the content length and transfer encodings
+            HttpString transferEncoding = Headers.IDENTITY;
+            if(hasTransferEncoding) {
+                transferEncoding = new HttpString(headers.getLast(Headers.TRANSFER_ENCODING));
+            } else if(http11 && ! Headers.IDENTITY.equals(transferEncoding)) {
+                transferEncoding = Headers.CHUNKED;
             }
 
-            if (! transferEncoding.equals(Headers.IDENTITY.toString())) {
+            if(! transferEncoding.equals(Headers.IDENTITY)) {
                 conduit = new ChunkedStreamSourceConduit(conduit, channel, connection.getBufferPool(), getFinishListener(closeConnection), maxEntitySize(connection.getOptions()));
-            } else if (headers.contains(Headers.CONTENT_LENGTH)) {
+            } else if (hasContentLength) {
                 contentLength = Long.parseLong(headers.getFirst(Headers.CONTENT_LENGTH));
                 if(contentLength == 0L) {
                     conduit = new EmptyStreamSourceConduit(channel.getIoThread());
@@ -299,6 +303,7 @@ public final class PendingHttpRequest {
                 closeConnection = true;
             }
         }
+
         // Create the http response
         final StreamSourceChannel responseChannel = new ConduitStreamSourceChannel(channel, conduit);
         final HttpClientResponse response = new HttpClientResponse(this, contentLength, responseChannel);

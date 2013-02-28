@@ -16,8 +16,12 @@
  * limitations under the License.
  */
 
-package io.undertow.client;
+package io.undertow.server.handlers.proxy;
 
+import io.undertow.client.HttpClient;
+import io.undertow.client.HttpClientConnection;
+import io.undertow.client.HttpClientRequest;
+import io.undertow.client.HttpClientResponse;
 import io.undertow.io.IoCallback;
 import io.undertow.io.Sender;
 import io.undertow.server.HttpHandler;
@@ -47,9 +51,7 @@ import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.net.URI;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.Future;
+import java.net.URISyntaxException;
 
 /**
  * @author Emanuel Muckenhuber
@@ -59,6 +61,9 @@ public class HttpProxyTestCase {
 
     private static final String MESSAGE = "hello world!";
     private static XnioWorker worker;
+
+    private static final InetSocketAddress destination = new InetSocketAddress(7777);
+    private static final PathHandler rootHandler = new PathHandler();
 
     private static final OptionMap DEFAULT_OPTIONS;
     static {
@@ -72,6 +77,17 @@ public class HttpProxyTestCase {
         DEFAULT_OPTIONS = builder.getMap();
     }
 
+    private static final ProxyPathFactory PROXY_PATH_FACTORY = new ProxyPathFactory() {
+        @Override
+        public URI create(ProxyHttpRequest request) throws URISyntaxException {
+            final String rewritePath = request.getRequestPath().contains("rewrite") ? "/echo/" : "/basic/";
+            final String relativePath = request.getRelativePath();
+            final String path = rewritePath  + relativePath;
+            final String query = request.getQueryString();
+            return new URI(null, null, null, -1, path, query, null);
+        }
+    };
+
     @BeforeClass
     public static void beforeClass() throws IOException {
         // Create xnio worker
@@ -79,10 +95,22 @@ public class HttpProxyTestCase {
         final XnioWorker xnioWorker = xnio.createWorker(null, DEFAULT_OPTIONS);
         worker = xnioWorker;
 
+        final ProxyPass pass = SimpleProxyPass.setUp(worker, OptionMap.EMPTY, destination);
+        final ProxyHttpHandler handler = new ProxyHttpHandler(pass, PROXY_PATH_FACTORY);
+
+
         // proxy request from /rewrite to /real
-        final PathHandler paths = new PathHandler();
-        paths.addPath("/rewrite", new HttpProxyHandler(worker, OptionMap.EMPTY));
-        paths.addPath("/real", new HttpHandler() {
+        final PathHandler paths = rootHandler;
+        paths.addPath("/simple-proxy", handler);
+        paths.addPath("/rewrite", handler);
+        paths.addPath("/basic", new HttpHandler() {
+            @Override
+            public void handleRequest(HttpServerExchange exchange) {
+                final Sender sender = exchange.getResponseSender();
+                sender.send(MESSAGE, IoCallback.END_EXCHANGE);
+            }
+        });
+        paths.addPath("/echo", new HttpHandler() {
             @Override
             public void handleRequest(HttpServerExchange exchange) {
                 final StreamSourceChannel channel = exchange.getRequestChannel();
@@ -103,6 +131,35 @@ public class HttpProxyTestCase {
     }
 
     @Test
+    public void testSimpleProxiedHandler() throws Exception {
+
+        final SocketAddress address = new InetSocketAddress(DefaultServer.getHostPort("default"));
+        final HttpClient client = HttpClient.create(worker, OptionMap.EMPTY);
+        try {
+            final HttpClientConnection connection = client.connect(address, OptionMap.EMPTY).get();
+            try {
+                for(int i = 0; i < 10; i++) {
+                    final HttpClientRequest request = connection.createRequest(Methods.GET, new URI("/simple-proxy"));
+                    final HttpClientResponse response = request.writeRequest().get();
+                    final StreamSourceChannel responseChannel = response.readReplyBody();
+                    try {
+                        final InputStream is = new ChannelInputStream(responseChannel);
+                        Assert.assertEquals(MESSAGE, HttpClientUtils.readResponse(is));
+                    } finally {
+                        IoUtils.safeClose(responseChannel);
+                    }
+                }
+            } finally {
+                IoUtils.safeClose(connection);
+            }
+        } finally {
+            IoUtils.safeClose(client);
+        }
+
+
+    }
+
+    @Test
     public void testSimpleEchoProxy() throws Exception {
 
         final SocketAddress address = new InetSocketAddress(DefaultServer.getHostPort("default"));
@@ -112,7 +169,7 @@ public class HttpProxyTestCase {
             try {
                 for(int i = 0; i < 10; i++) {
                     final String message = MESSAGE;
-                    final HttpClientRequest request = connection.sendRequest(Methods.POST.toString(), new URI("/rewrite"));
+                    final HttpClientRequest request = connection.createRequest(Methods.POST, new URI("/rewrite"));
                     final StreamSinkChannel requestChannel = request.writeRequestBody(message.length());
                     try {
                         final ChannelOutputStream os = new ChannelOutputStream(requestChannel);

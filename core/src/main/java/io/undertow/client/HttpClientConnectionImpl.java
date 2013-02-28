@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.net.SocketAddress;
 import java.net.URI;
 import java.nio.ByteBuffer;
+import java.nio.channels.Channel;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 
 import io.undertow.UndertowLogger;
@@ -63,7 +64,7 @@ class HttpClientConnectionImpl extends HttpClientConnection implements Connected
     private final Pool<ByteBuffer> bufferPool;
     private final HttpRequestQueueStrategy queuingStrategy;
     private final ClientReadListener readListener = new ClientReadListener();
-    private final ChannelListener.Setter<ConnectedChannel> closeSetter;
+    private final ChannelListener.SimpleSetter<ConnectedChannel> closeSetter = new ChannelListener.SimpleSetter<>();
 
     private static final int UPGRADED = 1 << 29;
     private static final int CLOSE_REQ = 1 << 30;
@@ -81,14 +82,14 @@ class HttpClientConnectionImpl extends HttpClientConnection implements Connected
         this.bufferPool = client.getBufferPool();
         //
         queuingStrategy = HttpRequestQueueStrategy.create(this, options);
-        closeSetter = ChannelListeners.<ConnectedChannel>getDelegatingSetter(underlyingChannel.getCloseSetter(), this);
         pipelining = queuingStrategy.supportsPipelining(); // TODO "wait" for the first response to determine this
-
-        getCloseSetter().set(new ChannelListener<ConnectedChannel>() {
+        // Make sure the connection is marked as closed too
+        underlyingChannel.getCloseSetter().set(new ChannelListener<Channel>() {
             @Override
-            public void handleEvent(ConnectedChannel channel) {
+            public void handleEvent(Channel channel) {
                 IoUtils.safeClose(HttpClientConnectionImpl.this);
                 client.connectionClosed(HttpClientConnectionImpl.this);
+                ChannelListeners.invokeChannelListener(underlyingChannel, closeSetter.get());
             }
         });
     }
@@ -252,10 +253,15 @@ class HttpClientConnectionImpl extends HttpClientConnection implements Connected
      * @return a new request instance
      */
     protected HttpClientRequest internalCreateRequest(final HttpString method, final URI target, final boolean pipelining) {
-        if (allAreSet(state, UPGRADED | CLOSE_REQ | CLOSE_REQ)) {
+        if (anyAreSet(state, UPGRADED | CLOSE_REQ | CLOSED)) {
             return null;
         }
         return new HttpClientRequestImpl(this, underlyingChannel, method, target, pipelining);
+    }
+
+    @Override
+    public boolean isClosed() {
+        return anyAreSet(state, CLOSED | CLOSE_REQ);
     }
 
     @Override
@@ -296,6 +302,9 @@ class HttpClientConnectionImpl extends HttpClientConnection implements Connected
      * @param request the request
      */
     void sendingCompleted(final PendingHttpRequest request) {
+        if(underlyingChannel.isWriteResumed()) {
+            underlyingChannel.suspendWrites();
+        }
         queuingStrategy.requestSent(request);
         UndertowLogger.CLIENT_LOGGER.tracef("request fully sent %s", request);
         int currentState = state;
@@ -314,6 +323,9 @@ class HttpClientConnectionImpl extends HttpClientConnection implements Connected
      * @param request the request
      */
     void requestCompleted(final PendingHttpRequest request) {
+        if(underlyingChannel.isReadResumed()) {
+            underlyingChannel.suspendReads();
+        }
         int currentState = stateUpdater.getAndDecrement(this);
         queuingStrategy.requestCompleted(request);
         UndertowLogger.CLIENT_LOGGER.tracef("request completed %s", request);

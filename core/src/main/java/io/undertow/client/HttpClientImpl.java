@@ -51,11 +51,11 @@ import java.util.Set;
 /**
  * @author Emanuel Muckenhuber
  */
-class HttpClientImpl extends HttpClient {
+class HttpClientImpl extends HttpClient implements HttpClientConnectionListener {
 
     private final OptionMap options;
     private final Pool<ByteBuffer> bufferPool;
-    // TODO sconnection management
+    // TODO connection management
     private final Set<HttpClientConnection> connections = Collections.synchronizedSet(Collections.newSetFromMap(new IdentityHashMap<HttpClientConnection, Boolean>()));
 
     HttpClientImpl(final XnioWorker worker, final OptionMap options) {
@@ -147,7 +147,17 @@ class HttpClientImpl extends HttpClient {
         return bufferPool;
     }
 
-    void connectionClosed(HttpClientConnection connection) {
+    @Override
+    public void connectionOpened(HttpClientConnection connection) {
+        connections.add(connection);
+    }
+
+    @Override
+    public void connectionUpgraded(HttpClientConnection connection) {
+        //
+    }
+
+    public void connectionClosed(HttpClientConnection connection) {
         connections.remove(connection);
     }
 
@@ -181,7 +191,7 @@ class HttpClientImpl extends HttpClient {
             }
             final HttpClientConnection connection = new HttpClientConnectionImpl(assembledChannel, pushBackStreamChannel, options, HttpClientImpl.this);
             result.setResult(connection);
-            connections.add(connection);
+            connectionOpened(connection);
         }
     }
 
