@@ -113,8 +113,18 @@ class ModClusterProxyClient implements ProxyClient {
                     }
 
                     @Override
+                    public void failed(HttpServerExchange exchange, ProxyConnection result) {
+                        callback.failed(exchange, result);
+                    }
+
+                    @Override
                     public void couldNotResolveBackend(HttpServerExchange exchange) {
                         callback.couldNotResolveBackend(exchange);
+                    }
+
+                    @Override
+                    public void responseComplete(ResponseCompletionHandle completionHandle, ProxyConnection result) {
+                        callback.responseComplete(completionHandle, result);
                     }
                 };
 

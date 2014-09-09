@@ -28,11 +28,17 @@ import io.undertow.client.ClientConnection;
 public class ProxyConnection {
 
     private final ClientConnection connection;
+    private final ConnectionPoolErrorHandler errorHandler;
     private final String targetPath;
 
     public ProxyConnection(ClientConnection connection, String targetPath) {
+        this(connection, targetPath, null);
+    }
+
+    public ProxyConnection(ClientConnection connection, String targetPath, ConnectionPoolErrorHandler errorHandler) {
         this.connection = connection;
         this.targetPath = targetPath;
+        this.errorHandler = errorHandler;
     }
 
     public ClientConnection getConnection() {
@@ -42,4 +48,11 @@ public class ProxyConnection {
     public String getTargetPath() {
         return targetPath;
     }
+
+    public void failed() {
+        if (errorHandler != null) {
+            errorHandler.handleError();
+        }
+    }
+
 }

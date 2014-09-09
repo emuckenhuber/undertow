@@ -18,6 +18,11 @@
 
 package io.undertow.server.handlers.proxy;
 
+import java.io.IOException;
+import java.net.URI;
+import java.nio.channels.Channel;
+import java.util.concurrent.TimeUnit;
+
 import io.undertow.client.ClientCallback;
 import io.undertow.client.ClientConnection;
 import io.undertow.client.UndertowClient;
@@ -27,11 +32,6 @@ import io.undertow.util.AttachmentKey;
 import org.xnio.ChannelListener;
 import org.xnio.IoUtils;
 import org.xnio.OptionMap;
-
-import java.io.IOException;
-import java.net.URI;
-import java.nio.channels.Channel;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Simple proxy client provider. This provider simply proxies to another server, using a a one to one
@@ -45,7 +45,13 @@ public class SimpleProxyClientProvider implements ProxyClient {
     private final AttachmentKey<ClientConnection> clientAttachmentKey = AttachmentKey.create(ClientConnection.class);
     private final UndertowClient client;
 
-    private static final ProxyTarget TARGET = new ProxyTarget() {};
+    private static final ProxyTarget TARGET = new ProxyTarget() {
+
+        @Override
+        public ProxyRequestErrorPolicy getRequestErrorPolicy() {
+            return ProxyRequestErrorPolicy.NO_RETRY;
+        }
+    };
 
     public SimpleProxyClientProvider(URI uri) {
         this.uri = uri;

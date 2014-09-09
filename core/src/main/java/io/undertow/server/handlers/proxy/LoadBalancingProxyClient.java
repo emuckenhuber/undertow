@@ -18,6 +18,20 @@
 
 package io.undertow.server.handlers.proxy;
 
+import static io.undertow.server.handlers.proxy.ProxyConnectionPool.AvailabilityType.AVAILABLE;
+import static io.undertow.server.handlers.proxy.ProxyConnectionPool.AvailabilityType.FULL;
+import static io.undertow.server.handlers.proxy.ProxyConnectionPool.AvailabilityType.FULL_QUEUE;
+import static io.undertow.server.handlers.proxy.ProxyConnectionPool.AvailabilityType.PROBLEM;
+import static org.xnio.IoUtils.safeClose;
+
+import java.net.InetSocketAddress;
+import java.net.URI;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+
 import io.undertow.UndertowLogger;
 import io.undertow.client.ClientConnection;
 import io.undertow.client.UndertowClient;
@@ -28,17 +42,6 @@ import io.undertow.util.AttachmentKey;
 import io.undertow.util.CopyOnWriteMap;
 import org.xnio.OptionMap;
 import org.xnio.ssl.XnioSsl;
-
-import java.net.InetSocketAddress;
-import java.net.URI;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.CopyOnWriteArraySet;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-
-import static io.undertow.server.handlers.proxy.ProxyConnectionPool.AvailabilityType.*;
-import static org.xnio.IoUtils.safeClose;
 
 /**
  * Initial implementation of a load balancing proxy client. This initial implementation is rather simplistic, and
@@ -83,6 +86,12 @@ public class LoadBalancingProxyClient implements ProxyClient {
     private final ExclusivityChecker exclusivityChecker;
 
     private static final ProxyTarget PROXY_TARGET = new ProxyTarget() {
+
+        @Override
+        public ProxyRequestErrorPolicy getRequestErrorPolicy() {
+            return ProxyRequestErrorPolicy.NO_RETRY;
+        }
+
     };
 
     public LoadBalancingProxyClient() {
@@ -269,8 +278,18 @@ public class LoadBalancingProxyClient implements ProxyClient {
                     }
 
                     @Override
+                    public void failed(HttpServerExchange exchange, ProxyConnection result) {
+                        failed(exchange, result);
+                    }
+
+                    @Override
                     public void couldNotResolveBackend(HttpServerExchange exchange) {
                         callback.couldNotResolveBackend(exchange);
+                    }
+
+                    @Override
+                    public void responseComplete(ResponseCompletionHandle completionHandle, ProxyConnection result) {
+                        callback.responseComplete(completionHandle, result);
                     }
                 }, timeout, timeUnit, true);
             } else {

@@ -260,7 +260,7 @@ public class ProxyConnectionPool implements Closeable {
             }
         });
 
-        callback.completed(exchange, new ProxyConnection(result.clientConnection, uri.getPath() == null ? "/" : uri.getPath()));
+        callback.completed(exchange, new ProxyConnection(result.clientConnection, uri.getPath() == null ? "/" : uri.getPath(), connectionPoolManager));
     }
 
     public AvailabilityType available() {

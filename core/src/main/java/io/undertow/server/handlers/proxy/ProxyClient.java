@@ -62,5 +62,7 @@ public interface ProxyClient {
      */
     public interface ProxyTarget {
 
+        ProxyRequestErrorPolicy getRequestErrorPolicy();
+
     }
 }

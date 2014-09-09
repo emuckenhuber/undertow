@@ -151,6 +151,11 @@ class NodePingUtil {
                     }
 
                     @Override
+                    public void failed(HttpServerExchange exchange, ProxyConnection result) {
+                        callback.failed();
+                    }
+
+                    @Override
                     public void queuedRequestFailed(HttpServerExchange exchange) {
                         callback.failed();
                     }
@@ -160,6 +165,10 @@ class NodePingUtil {
                         callback.failed();
                     }
 
+                    @Override
+                    public void responseComplete(ResponseCompletionHandle completionHandle, ProxyConnection result) {
+                        completionHandle.complete();
+                    }
                 }, timeout, TimeUnit.SECONDS, false);
             }
         });

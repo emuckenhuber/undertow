@@ -18,6 +18,7 @@
 
 package io.undertow.server.handlers.proxy;
 
+import io.undertow.client.ClientExchange;
 import io.undertow.server.HttpServerExchange;
 
 /**
@@ -36,6 +37,8 @@ public interface ProxyCallback<T> {
      */
     void failed(final HttpServerExchange exchange);
 
+    void failed(final HttpServerExchange exchange, T result);
+
     /**
      * Callback if no backend server could be found.
      *
@@ -51,5 +54,30 @@ public interface ProxyCallback<T> {
      * @param exchange The exchange
      */
     void queuedRequestFailed(HttpServerExchange exchange);
+
+    /**
+     * Callback when the proxy response is available. This allows additional checks for the response code to determine
+     * whether the request should be retried.
+     *
+     * @param completionHandle
+     * @param result
+     */
+    void responseComplete(ResponseCompletionHandle completionHandle, T result);
+
+    interface ResponseCompletionHandle {
+
+        ClientExchange getClientExchange();
+
+        /**
+         * Complete the transfer of the request.
+         */
+        void complete();
+
+        /**
+         * Discard the current response.
+         */
+        void discard();
+
+    }
 
 }

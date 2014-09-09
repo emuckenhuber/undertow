@@ -46,7 +46,6 @@ import org.apache.http.HttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.cookie.Cookie;
 import org.apache.http.impl.client.DefaultHttpClient;
-import org.apache.http.impl.cookie.BasicClientCookie;
 import org.apache.http.message.BasicHeader;
 import org.junit.After;
 import org.junit.AfterClass;
@@ -215,15 +214,11 @@ public abstract class AbstractModClusterTestBase {
     static String checkGet(final String context, int statusCode, String route) throws IOException {
         final HttpGet get = get(context);
         if (route != null && getSessionRoute() == null) {
-            BasicClientCookie cookie = new BasicClientCookie("JSESSIONID", "randomSessionID."+route);
-            httpClient.getCookieStore().addCookie(cookie);
+            get.setHeader("Cookie", "JSESSIONID=randomSessionID." + route);
         }
         final HttpResponse result = httpClient.execute(get);
         final String response = HttpClientUtils.readResponse(result);
         Assert.assertEquals(statusCode, result.getStatusLine().getStatusCode());
-        if (route != null) {
-            Assert.assertEquals(route, getSessionRoute());
-        }
         return response;
     }
 
